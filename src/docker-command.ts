@@ -55,6 +55,7 @@ async function executeCommand(
   options: exec.ExecOptions
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const fullCommand = cmd.join(' ');
+  // biome-ignore lint/style/noNonNullAssertion: We know the first element is the path to the executable
   const path = cmd[0]!;
   const args = cmd.slice(1);
 
