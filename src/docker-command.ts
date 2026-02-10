@@ -11,14 +11,15 @@ import * as exec from '@actions/exec';
  * Contains essential information about a Docker image.
  */
 export type DockerImageMetadata = {
-  readonly Id: string;
   readonly Size: number;
-  readonly Architecture: string;
-  readonly Os: string;
-  readonly Variant?: string;
-  readonly RepoTags: readonly string[];
-  readonly RepoDigests: readonly string[];
-  readonly Created: string;
+  // unused fields:
+  //   readonly Id: string;
+  //   readonly Architecture: string;
+  //   readonly Os: string;
+  //   readonly Variant?: string;
+  //   readonly RepoTags: readonly string[];
+  //   readonly RepoDigests: readonly string[];
+  //   readonly Created: string;
 };
 
 /**
@@ -27,24 +28,36 @@ export type DockerImageMetadata = {
  */
 export type DockerImageManifest = {
   readonly digest?: string;
-  readonly schemaVersion?: number;
-  readonly mediaType?: string;
-  readonly [key: string]: unknown;
+  // unused fields:
+  //   readonly schemaVersion?: number;
+  //   readonly mediaType?: string;
+  //   readonly [key: string]: unknown;
 };
+
+function getContainerRuntime(): 'podman' | 'docker' {
+  const val = process.env.DOCKER_COMPOSE_CACHE_CONTAINER_RUNTIME || 'docker';
+  if (val !== 'docker' && val !== 'podman') {
+    core.warning(`Invalid container runtime specified: ${val}. Defaulting to 'docker'.`);
+    return 'docker';
+  }
+  return val;
+}
 
 /**
  * Executes a Docker command and logs execution time.
  *
- * @param dockerArgs - Array of command arguments.
+ * @param cmd - Array of path to the executable and command arguments.
  * @param options - Execution options.
  * @returns Promise resolving to object containing exit code, stdout, and stderr.
  */
-async function executeDockerCommand(
-  dockerArgs: readonly string[],
+async function executeCommand(
+  cmd: readonly string[],
   options: exec.ExecOptions
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  // Format command for logging
-  const fullCommand = `docker ${dockerArgs.join(' ')}`;
+  const fullCommand = cmd.join(' ');
+  // biome-ignore lint/style/noNonNullAssertion: We know the first element is the path to the executable
+  const path = cmd[0]!;
+  const args = cmd.slice(1);
 
   // Log command execution
   core.info(`Executing: ${fullCommand}`);
@@ -90,7 +103,7 @@ async function executeDockerCommand(
 
   try {
     // Execute the command
-    const exitCode = await exec.exec('docker', [...dockerArgs], execOptionsWithCapture);
+    const exitCode = await exec.exec(path, [...args], execOptionsWithCapture);
 
     // Calculate and log execution time
     const executionEndTime = performance.now();
@@ -119,17 +132,18 @@ async function executeDockerCommand(
  * @returns Promise resolving to boolean indicating success or failure.
  */
 export async function pullImage(imageName: string, platform: string | undefined): Promise<boolean> {
+  const containerRuntime = getContainerRuntime();
   try {
     const execOptions = { ignoreReturnCode: true } as const;
-    // Construct args array conditionally including platform flag if specified
-    const pullCommandArgs = platform ? ['pull', '--platform', platform, imageName] : ['pull', imageName];
 
+    const pullCommand = [containerRuntime, 'pull', imageName];
     if (platform) {
+      pullCommand.push('--platform', platform);
       core.info(`Pulling image ${imageName} for platform ${platform}`);
     }
 
     // Execute docker pull command
-    const { exitCode, stderr } = await executeDockerCommand(pullCommandArgs, execOptions);
+    const { exitCode, stderr } = await executeCommand(pullCommand, execOptions);
 
     if (exitCode !== 0) {
       core.warning(`Failed to pull image ${imageName}${platform ? ` for platform ${platform}` : ''}: ${stderr}`);
@@ -158,11 +172,10 @@ export async function inspectImageRemote(imageName: string): Promise<DockerImage
       ignoreReturnCode: true,
     };
 
-    // Execute docker buildx command to inspect the image manifest
-    const { exitCode, stdout, stderr } = await executeDockerCommand(
-      ['buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest}}', imageName],
-      execOptions
-    );
+    // Still use docker buildx to inspect remote images since it's installed by default on github hosted runners.
+    // Otherwise we would have to install skopeo
+    const cmd = ['docker', 'buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest}}', imageName];
+    const { exitCode, stdout, stderr } = await executeCommand(cmd, execOptions);
 
     if (exitCode !== 0) {
       core.warning(`Failed to inspect manifest for ${imageName}: ${stderr}`);
@@ -200,16 +213,16 @@ export async function inspectImageRemote(imageName: string): Promise<DockerImage
  * @returns Promise resolving to DockerInspectInfo object or undefined on failure.
  */
 export async function inspectImageLocal(imageName: string): Promise<DockerImageMetadata | undefined> {
+  const containerRuntime = getContainerRuntime();
+
   try {
     const execOptions: exec.ExecOptions = {
       ignoreReturnCode: true,
     };
+    const cmd = [containerRuntime, 'inspect', '--format', '{{json .}}', imageName];
 
     // Execute docker inspect command to get detailed image information
-    const { exitCode, stdout, stderr } = await executeDockerCommand(
-      ['inspect', '--format', '{{json .}}', imageName],
-      execOptions
-    );
+    const { exitCode, stdout, stderr } = await executeCommand(cmd, execOptions);
 
     if (exitCode !== 0) {
       core.warning(`Failed to inspect image ${imageName}: ${stderr}`);
@@ -238,10 +251,14 @@ export async function inspectImageLocal(imageName: string): Promise<DockerImageM
  * @returns Promise resolving to boolean indicating success or failure.
  */
 export async function saveImageToTar(imageName: string, outputPath: string): Promise<boolean> {
+  const containerRuntime = getContainerRuntime();
   try {
     const execOptions = { ignoreReturnCode: true } as const;
     // Execute docker save command to create a tar archive of the image
-    const { exitCode, stderr } = await executeDockerCommand(['save', '-o', outputPath, imageName], execOptions);
+    const { exitCode, stderr } = await executeCommand(
+      [containerRuntime, 'save', '-o', outputPath, imageName],
+      execOptions
+    );
 
     if (exitCode !== 0) {
       core.warning(`Failed to save image ${imageName} to ${outputPath}: ${stderr}`);
@@ -262,10 +279,11 @@ export async function saveImageToTar(imageName: string, outputPath: string): Pro
  * @returns Promise resolving to boolean indicating success or failure.
  */
 export async function loadImageFromTar(tarPath: string): Promise<boolean> {
+  const containerRuntime = getContainerRuntime();
   try {
     const execOptions = { ignoreReturnCode: true } as const;
     // Execute docker load command to restore image from tar archive
-    const { exitCode, stderr } = await executeDockerCommand(['load', '-i', tarPath], execOptions);
+    const { exitCode, stderr } = await executeCommand([containerRuntime, 'load', '-i', tarPath], execOptions);
 
     if (exitCode !== 0) {
       core.warning(`Failed to load image from ${tarPath}: ${stderr}`);
