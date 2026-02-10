@@ -7,14 +7,7 @@
  * Contains essential information about a Docker image.
  */
 export type DockerImageMetadata = {
-    readonly Id: string;
     readonly Size: number;
-    readonly Architecture: string;
-    readonly Os: string;
-    readonly Variant?: string;
-    readonly RepoTags: readonly string[];
-    readonly RepoDigests: readonly string[];
-    readonly Created: string;
 };
 /**
  * Docker image manifest information.
@@ -22,9 +15,6 @@ export type DockerImageMetadata = {
  */
 export type DockerImageManifest = {
     readonly digest?: string;
-    readonly schemaVersion?: number;
-    readonly mediaType?: string;
-    readonly [key: string]: unknown;
 };
 /**
  * Pulls a Docker image, optionally for a specific platform.
