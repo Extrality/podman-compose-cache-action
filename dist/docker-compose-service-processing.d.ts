@@ -2,6 +2,7 @@
  * @fileoverview Image processing logic for Docker Compose services.
  * Handles image pulling, caching, and cache restoration with manifest validation.
  */
+import { type ContainerRuntime } from './docker-command';
 import type { ComposeService } from './docker-compose-file';
 /**
  * Result of processing a single Docker service.
@@ -25,4 +26,4 @@ export type ServiceResult = {
  * @param skipLatestCheck - Whether to skip digest verification
  * @param forceRefresh - Whether to ignore existing cache and pull fresh images
  */
-export declare function processService(serviceDefinition: ComposeService, cacheKeyPrefix: string, skipLatestCheck: boolean, forceRefresh?: boolean): Promise<ServiceResult>;
+export declare function processService(containerRuntime: ContainerRuntime, serviceDefinition: ComposeService, cacheKeyPrefix: string, skipLatestCheck: boolean, forceRefresh?: boolean): Promise<ServiceResult>;

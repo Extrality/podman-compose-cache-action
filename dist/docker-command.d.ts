@@ -16,6 +16,7 @@ export type DockerImageMetadata = {
 export type DockerImageManifest = {
     readonly digest?: string;
 };
+export type ContainerRuntime = 'docker' | 'podman';
 /**
  * Pulls a Docker image, optionally for a specific platform.
  *
@@ -23,7 +24,7 @@ export type DockerImageManifest = {
  * @param platform - Optional platform string (e.g., 'linux/amd64').
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export declare function pullImage(imageName: string, platform: string | undefined): Promise<boolean>;
+export declare function pullImage(containerRuntime: ContainerRuntime, imageName: string, platform: string | undefined): Promise<boolean>;
 /**
  * Inspects a remote Docker image and returns its manifest information.
  *
@@ -50,7 +51,7 @@ export declare function inspectImageRemote(imageName: string): Promise<DockerIma
  * @param imageName - Docker image name with optional tag.
  * @returns Promise resolving to DockerInspectInfo object or undefined on failure.
  */
-export declare function inspectImageLocal(imageName: string): Promise<DockerImageMetadata | undefined>;
+export declare function inspectImageLocal(containerRuntime: ContainerRuntime, imageName: string): Promise<DockerImageMetadata | undefined>;
 /**
  * Saves Docker image to a tar file.
  *
@@ -58,11 +59,11 @@ export declare function inspectImageLocal(imageName: string): Promise<DockerImag
  * @param outputPath - File path where the tar file should be created.
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export declare function saveImageToTar(imageName: string, outputPath: string): Promise<boolean>;
+export declare function saveImageToTar(containerRuntime: ContainerRuntime, imageName: string, outputPath: string): Promise<boolean>;
 /**
  * Loads Docker image from a tar file.
  *
  * @param tarPath - Path to the tar file containing the Docker image.
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export declare function loadImageFromTar(tarPath: string): Promise<boolean>;
+export declare function loadImageFromTar(containerRuntime: ContainerRuntime, tarPath: string): Promise<boolean>;
