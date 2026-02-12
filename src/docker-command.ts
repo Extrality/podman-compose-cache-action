@@ -255,10 +255,12 @@ export async function saveImageToTar(
   try {
     const execOptions = { ignoreReturnCode: true } as const;
     // Execute docker save command to create a tar archive of the image
-    const { exitCode, stderr } = await executeCommand(
-      [containerRuntime, 'save', '-o', outputPath, imageName],
-      execOptions
-    );
+    const cmd = [containerRuntime, 'save', '-o', outputPath, imageName];
+    if (containerRuntime === 'podman') {
+      // oci-archive supports more formats like zstd compressed layers
+      cmd.push('--format', 'oci-archive');
+    }
+    const { exitCode, stderr } = await executeCommand(cmd, execOptions);
 
     if (exitCode !== 0) {
       core.warning(`Failed to save image ${imageName} to ${outputPath}: ${stderr}`);
