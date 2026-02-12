@@ -17,6 +17,7 @@ import {
   saveToCache,
 } from './cache';
 import {
+  type ContainerRuntime,
   type DockerImageManifest,
   inspectImageLocal,
   inspectImageRemote,
@@ -53,6 +54,7 @@ type ImageOperationResult = {
  * Pulls an image and saves it to cache.
  */
 async function pullAndCacheImage(
+  containerRuntime: ContainerRuntime,
   completeImageName: string,
   platformString: string | undefined,
   imageCacheKey: string,
@@ -63,7 +65,7 @@ async function pullAndCacheImage(
   manifest: DockerImageManifest
 ): Promise<ImageOperationResult> {
   // Pull the image
-  if (!(await pullImage(completeImageName, platformString))) {
+  if (!(await pullImage(containerRuntime, completeImageName, platformString))) {
     return {
       success: false,
       error: `Failed to pull image: ${completeImageName}`,
@@ -81,7 +83,7 @@ async function pullAndCacheImage(
   }
 
   // Save the image to tar file
-  if (!(await saveImageToTar(completeImageName, imageTarPath))) {
+  if (!(await saveImageToTar(containerRuntime, completeImageName, imageTarPath))) {
     return {
       success: false,
       error: `Failed to save image to tar: ${completeImageName}`,
@@ -98,7 +100,7 @@ async function pullAndCacheImage(
   }
 
   // Get image size
-  const inspectInfo = await inspectImageLocal(completeImageName);
+  const inspectInfo = await inspectImageLocal(containerRuntime, completeImageName);
 
   return {
     success: true,
@@ -118,6 +120,7 @@ async function pullAndCacheImage(
  * @returns Promise resolving to ServiceResult if cache found, undefined otherwise
  */
 async function tryRestoreFromCacheWithoutDigest(
+  containerRuntime: ContainerRuntime,
   completeImageName: string,
   imageNameWithoutTag: string,
   imageTag: string,
@@ -142,14 +145,14 @@ async function tryRestoreFromCacheWithoutDigest(
   }
 
   // Load image from cache
-  const loadSuccess = await loadImageFromTar(fallbackTarPath);
+  const loadSuccess = await loadImageFromTar(containerRuntime, fallbackTarPath);
   if (!loadSuccess) {
     core.debug(`Failed to load image from fallback cache: ${completeImageName}`);
     return undefined;
   }
 
   // Get image size after successful load
-  const inspectInfo = await inspectImageLocal(completeImageName);
+  const inspectInfo = await inspectImageLocal(containerRuntime, completeImageName);
   const imageSize = inspectInfo?.Size;
 
   return {
@@ -167,6 +170,7 @@ async function tryRestoreFromCacheWithoutDigest(
  * Processes cache hit scenario with optional manifest validation.
  */
 async function processCacheHit(
+  containerRuntime: ContainerRuntime,
   completeImageName: string,
   imageTarPath: string,
   manifestPath: string,
@@ -176,7 +180,7 @@ async function processCacheHit(
   platform: string | undefined
 ): Promise<ServiceResult> {
   // Load image from cache
-  const loadSuccess = await loadImageFromTar(imageTarPath);
+  const loadSuccess = await loadImageFromTar(containerRuntime, imageTarPath);
   if (!loadSuccess) {
     return {
       success: false,
@@ -190,7 +194,7 @@ async function processCacheHit(
   }
 
   // Get image size after successful load
-  const inspectInfo = await inspectImageLocal(completeImageName);
+  const inspectInfo = await inspectImageLocal(containerRuntime, completeImageName);
   const imageSize = inspectInfo?.Size;
 
   // If skip latest check is enabled, return immediately
@@ -257,7 +261,7 @@ async function processCacheHit(
 
   // Handle manifest mismatch - pull fresh image
   core.info(`Manifest mismatch detected for ${completeImageName}, pulling fresh image`);
-  const pullSuccess = await pullImage(completeImageName, platform);
+  const pullSuccess = await pullImage(containerRuntime, completeImageName, platform);
   if (!pullSuccess) {
     core.warning(`Failed to pull updated image ${completeImageName}`);
   }
@@ -283,6 +287,7 @@ async function processCacheHit(
  * @param forceRefresh - Whether to ignore existing cache and pull fresh images
  */
 export async function processService(
+  containerRuntime: ContainerRuntime,
   serviceDefinition: ComposeService,
   cacheKeyPrefix: string,
   skipLatestCheck: boolean,
@@ -311,6 +316,7 @@ export async function processService(
     // Registry unavailable - try fallback to cached version if skip-digest-verification is enabled
     if (skipLatestCheck && !forceRefresh) {
       const fallbackResult = await tryRestoreFromCacheWithoutDigest(
+        containerRuntime,
         completeImageName,
         imageNameWithoutTag,
         imageTagOrLatest,
@@ -372,6 +378,7 @@ export async function processService(
   if (forceRefresh) {
     core.info(`Force refresh enabled for ${completeImageName}, pulling fresh image`);
     const pullResult = await pullAndCacheImage(
+      containerRuntime,
       completeImageName,
       serviceDefinition.platform,
       imageCacheKey,
@@ -404,6 +411,7 @@ export async function processService(
   if (!cacheResult.success) {
     core.info(`Cache miss for ${completeImageName}, pulling and saving`);
     const pullResult = await pullAndCacheImage(
+      containerRuntime,
       completeImageName,
       serviceDefinition.platform,
       imageCacheKey,
@@ -429,6 +437,7 @@ export async function processService(
   // Process cache hit
   core.info(`Cache hit for ${completeImageName}, loading from cache`);
   const result = await processCacheHit(
+    containerRuntime,
     completeImageName,
     imageTarPath,
     manifestPath,

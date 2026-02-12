@@ -34,14 +34,7 @@ export type DockerImageManifest = {
   //   readonly [key: string]: unknown;
 };
 
-function getContainerRuntime(): 'podman' | 'docker' {
-  const val = process.env.DOCKER_COMPOSE_CACHE_CONTAINER_RUNTIME || 'docker';
-  if (val !== 'docker' && val !== 'podman') {
-    core.warning(`Invalid container runtime specified: ${val}. Defaulting to 'docker'.`);
-    return 'docker';
-  }
-  return val;
-}
+export type ContainerRuntime = 'docker' | 'podman';
 
 /**
  * Executes a Docker command and logs execution time.
@@ -131,8 +124,11 @@ async function executeCommand(
  * @param platform - Optional platform string (e.g., 'linux/amd64').
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export async function pullImage(imageName: string, platform: string | undefined): Promise<boolean> {
-  const containerRuntime = getContainerRuntime();
+export async function pullImage(
+  containerRuntime: ContainerRuntime,
+  imageName: string,
+  platform: string | undefined
+): Promise<boolean> {
   try {
     const execOptions = { ignoreReturnCode: true } as const;
 
@@ -212,9 +208,10 @@ export async function inspectImageRemote(imageName: string): Promise<DockerImage
  * @param imageName - Docker image name with optional tag.
  * @returns Promise resolving to DockerInspectInfo object or undefined on failure.
  */
-export async function inspectImageLocal(imageName: string): Promise<DockerImageMetadata | undefined> {
-  const containerRuntime = getContainerRuntime();
-
+export async function inspectImageLocal(
+  containerRuntime: ContainerRuntime,
+  imageName: string
+): Promise<DockerImageMetadata | undefined> {
   try {
     const execOptions: exec.ExecOptions = {
       ignoreReturnCode: true,
@@ -250,8 +247,11 @@ export async function inspectImageLocal(imageName: string): Promise<DockerImageM
  * @param outputPath - File path where the tar file should be created.
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export async function saveImageToTar(imageName: string, outputPath: string): Promise<boolean> {
-  const containerRuntime = getContainerRuntime();
+export async function saveImageToTar(
+  containerRuntime: ContainerRuntime,
+  imageName: string,
+  outputPath: string
+): Promise<boolean> {
   try {
     const execOptions = { ignoreReturnCode: true } as const;
     // Execute docker save command to create a tar archive of the image
@@ -278,8 +278,7 @@ export async function saveImageToTar(imageName: string, outputPath: string): Pro
  * @param tarPath - Path to the tar file containing the Docker image.
  * @returns Promise resolving to boolean indicating success or failure.
  */
-export async function loadImageFromTar(tarPath: string): Promise<boolean> {
-  const containerRuntime = getContainerRuntime();
+export async function loadImageFromTar(containerRuntime: ContainerRuntime, tarPath: string): Promise<boolean> {
   try {
     const execOptions = { ignoreReturnCode: true } as const;
     // Execute docker load command to restore image from tar archive

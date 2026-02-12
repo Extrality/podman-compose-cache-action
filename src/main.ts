@@ -14,6 +14,7 @@ import {
   type TimedServiceResult,
 } from './action-outputs';
 import { formatTimeBetween } from './date-utils';
+import type { ContainerRuntime } from './docker-command';
 import { getComposeFilePathsToProcess, getComposeServicesFromFiles } from './docker-compose-file';
 import { processService } from './docker-compose-service-processing';
 
@@ -28,9 +29,11 @@ const DEFAULT_CACHE_KEY_PREFIX = 'docker-compose-image';
 type ActionConfig = {
   readonly composeFilePaths: ReadonlyArray<string>;
   readonly excludeImageNames: ReadonlyArray<string>;
+  readonly additionalImages: ReadonlyArray<string>;
   readonly cacheKeyPrefix: string;
   readonly skipDigestVerification: boolean;
   readonly forceRefresh: boolean;
+  readonly containerRuntime: string;
 };
 
 /**
@@ -67,9 +70,11 @@ function getActionConfig(): ActionConfig {
   return {
     composeFilePaths: core.getMultilineInput('compose-files'),
     excludeImageNames: core.getMultilineInput('exclude-images'),
+    additionalImages: core.getMultilineInput('additional-images'),
     cacheKeyPrefix: core.getInput('cache-key-prefix') || DEFAULT_CACHE_KEY_PREFIX,
     skipDigestVerification: getSkipDigestVerification(),
     forceRefresh: core.getBooleanInput('force-refresh'),
+    containerRuntime: core.getInput('container-runtime') || 'docker',
   };
 }
 
@@ -85,25 +90,34 @@ export async function run(): Promise<void> {
 
     const discoveredComposeFiles = getComposeFilePathsToProcess(actionConfig.composeFilePaths);
     const targetServices = getComposeServicesFromFiles(discoveredComposeFiles, actionConfig.excludeImageNames);
+    const targetImages = [...targetServices, ...actionConfig.additionalImages.map((image) => ({ image }))];
 
-    if (targetServices.length === 0) {
+    if (targetImages.length === 0) {
       core.info('No Docker services found in compose files or all services were excluded');
       setActionOutputs(false, []);
       return;
     }
 
-    core.info(`Found ${targetServices.length} services to cache`);
+    core.info(`Found ${targetImages.length} images to cache`);
 
     if (actionConfig.forceRefresh) {
       core.info('Force refresh enabled - ignoring existing cache');
     }
+    let containerRuntime = actionConfig.containerRuntime as ContainerRuntime;
+    if (!['docker', 'podman'].includes(actionConfig.containerRuntime)) {
+      core.warning(
+        `Unsupported container runtime '${actionConfig.containerRuntime}' specified. Defaulting to 'docker'.`
+      );
+      containerRuntime = 'docker';
+    }
 
     // Process all services concurrently
     const serviceProcessingResults: readonly TimedServiceResult[] = await Promise.all(
-      targetServices.map(async (currentService) => {
+      targetImages.map(async (currentImage) => {
         const serviceStartTime = performance.now();
         const serviceResult = await processService(
-          currentService,
+          containerRuntime,
+          currentImage,
           actionConfig.cacheKeyPrefix,
           actionConfig.skipDigestVerification,
           actionConfig.forceRefresh
