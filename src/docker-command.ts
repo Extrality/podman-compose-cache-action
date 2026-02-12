@@ -162,15 +162,21 @@ export async function pullImage(
  * @param imageName - Docker image name with optional tag.
  * @returns Promise resolving to DockerManifest object or undefined on failure.
  */
-export async function inspectImageRemote(imageName: string): Promise<DockerImageManifest | undefined> {
+export async function inspectImageRemote(
+  containerRuntime: ContainerRuntime,
+  imageName: string
+): Promise<DockerImageManifest | undefined> {
   try {
     const execOptions: exec.ExecOptions = {
       ignoreReturnCode: true,
     };
 
-    // Still use docker buildx to inspect remote images since it's installed by default on github hosted runners.
-    // Otherwise we would have to install skopeo
-    const cmd = ['docker', 'buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest}}', imageName];
+    let cmd: string[];
+    if (containerRuntime === 'docker') {
+      cmd = ['docker', 'buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest}}', imageName];
+    } else {
+      cmd = ['skopeo', 'inspect', '--format', '{{json .}}', `docker://${imageName}`];
+    }
     const { exitCode, stdout, stderr } = await executeCommand(cmd, execOptions);
 
     if (exitCode !== 0) {
@@ -180,8 +186,11 @@ export async function inspectImageRemote(imageName: string): Promise<DockerImage
 
     try {
       // Parse the JSON output to extract the manifest
-      const manifest = JSON.parse(stdout.trim()) as DockerImageManifest;
-      return manifest;
+      const manifest = JSON.parse(stdout.trim());
+      if (manifest.Digest) {
+        manifest.digest = manifest.Digest;
+      }
+      return manifest as DockerImageManifest;
     } catch (manifestJsonParseError) {
       core.warning(`Failed to parse manifest JSON for ${imageName}: ${manifestJsonParseError}`);
       return undefined;

@@ -73,7 +73,7 @@ async function pullAndCacheImage(
   }
 
   // Verify the digest matches after pull
-  const newManifest = await inspectImageRemote(completeImageName);
+  const newManifest = await inspectImageRemote(containerRuntime, completeImageName);
   const newImageDigest = newManifest?.digest;
   if (newImageDigest !== imageDigest) {
     return {
@@ -228,7 +228,7 @@ async function processCacheHit(
   // Perform manifest validation
   const [cachedManifest, remoteManifest] = await Promise.all([
     readManifestFromFile(manifestPath),
-    inspectImageRemote(completeImageName),
+    inspectImageRemote(containerRuntime, completeImageName),
   ]);
 
   // Skip if manifest can't be loaded or no current manifest
@@ -311,7 +311,7 @@ export async function processService(
   const imageNameWithoutTag = imageNamePart;
 
   // Get image manifest with digest for cache key generation
-  const manifest = await inspectImageRemote(completeImageName);
+  const manifest = await inspectImageRemote(containerRuntime, completeImageName);
   if (!manifest || !manifest.digest) {
     // Registry unavailable - try fallback to cached version if skip-digest-verification is enabled
     if (skipLatestCheck && !forceRefresh) {
