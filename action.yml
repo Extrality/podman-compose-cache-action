@@ -40,6 +40,14 @@ inputs:
     required: false
     default: 'false'
     deprecationMessage: 'skip-latest-check is deprecated. Use skip-digest-verification instead.'
+  additional-images:
+    description: >
+      Additional images to include in caching that are not defined in the compose files. One image per line.
+    required: false
+  container-runtime:
+    description: 'Container runtime to use for caching operations. Supported values: "docker" (default), "podman".'
+    required: false
+    default: 'docker'
 outputs:
   cache-hit:
     description: "Boolean value ('true' or 'false') indicating if *all* required images were restored from cache (and digests matched). Example: 'true'"
