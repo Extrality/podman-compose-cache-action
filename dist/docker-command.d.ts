@@ -34,7 +34,7 @@ export declare function pullImage(containerRuntime: ContainerRuntime, imageName:
  * @param imageName - Docker image name with optional tag.
  * @returns Promise resolving to DockerManifest object or undefined on failure.
  */
-export declare function inspectImageRemote(imageName: string): Promise<DockerImageManifest | undefined>;
+export declare function inspectImageRemote(containerRuntime: ContainerRuntime, imageName: string): Promise<DockerImageManifest | undefined>;
 /**
  * Inspects a local Docker image and returns detailed information.
  *
